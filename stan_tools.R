@@ -67,8 +67,8 @@ make_tdist_grid <- function(data, point_x, point_y, scale, nu = 100, id = "point
 # plot
 ################################################################################
 
-plot_post <- function(data, param_name, rope = NULL, cent_type = "median", title = NULL, 
-                      ci = 0.95, dec = 2) {
+plot_post <- function(data, param_name, rope = NULL, comp_val = NULL, cent_type = "median", 
+                      title = NULL, ci = 0.95, dec = 2, xlim = NULL, mle = NULL) {
   param <- data[[param_name]]
   
   central <- if (cent_type == "median") quantile(param, 0.5) else if (cent_type == "mean") mean(param) else NULL
@@ -79,23 +79,53 @@ plot_post <- function(data, param_name, rope = NULL, cent_type = "median", title
   hdi_texts <- round(hdi_rng, dec)
   
   p <- ggplot(data, aes(param)) +
-    geom_histogram(aes(y = ..density..), bins = 40, fill = "skyblue", color = "white", alpha = 0.6) + 
+    geom_histogram(aes(y = ..density..), bins = 40, fill = "skyblue", color = "white", alpha = 0.8) + 
     geom_vline(xintercept = central, color = "grey60", size = 1, alpha = 0.5) +
-    annotate("text", x = central, y = Inf, size = 5, label = central_text, vjust = 4) + 
+    annotate("text", x = central, y = Inf, label = central_text, size = 4, vjust = 4) + 
     geom_hdi(color = "black", size = 2, credible_mass = ci) + 
-    annotate("text", x = hdi_rng, y = 0, label = hdi_texts, size = 4, hjust = "center", vjust = -1) + 
-    annotate("text", x = mean(hdi_rng), y = 0, label = hdi_title, size = 5, vjust = -2) + 
+    annotate("text", x = hdi_rng, y = 0, label = hdi_texts, size = 3, hjust = "center", vjust = -1) + 
+    annotate("text", x = mean(hdi_rng), y = 0, label = hdi_title, size = 4, vjust = -2) + 
     labs(x = param_name, title = title, y = NULL) + 
+    {if (!is.null(comp_val)) geom_vline(xintercept = comp_val, color = "violet", linetype = "dashed", alpha = 0.5)} + 
+    {if (!is.null(mle)) 
+      geom_point(data = tibble(x = mle, y = 0), aes(x, y), pch = "+", size = 6, color = "grey60")
+    } + 
+    {if (!is.null(xlim)) lims(x = xlim)} + 
     theme_post()
   
   if (!is.null(rope)) {
     p <- p + geom_vline(xintercept = rope, size = .5, color = "purple", alpha = 0.8, linetype = "dashed") +
       geom_vline(xintercept = mean(rope), size = .5, color = "purple", alpha = 0.5, linetype = "solid") +
-      annotate("text", x = rope, y = 0, label = rope, size = 4, vjust = -6)
+      annotate("text", x = rope, y = 0, label = rope, size = 3, vjust = -6)
   }
   return(p)
 }
+#plot_post(res, "omega", rope = ROPE_OMEGA, xlim = c(0.3, 0.6), title = "Posteria of Omega")
 
+plot_post_pair_diff <- function(res, comp_idxs, par_prefix, comp_val = NULL, 
+                                mle_func = null_func) {
+  names <- sapply(comp_idxs, function(i) paste0(par_prefix, "_", i))
+  vars <- sapply(names, as.name)
+  ms_plot_pair(
+    n = length(comp_idxs),  
+    diag_plot = function(i, j) {
+      mle <- mle_func(comp_idxs[i])
+      plot_post(res, names[i], comp_val = comp_val, mle = mle)
+    }, 
+    upper_plot = function(i, j) {
+      mle <- mle_func(comp_idxs[i]) - mle_func(comp_idxs[j])
+      diff_name <- paste0(names[[i]], " - ", names[[j]])
+      tmp <- tibble(!!diff_name := res[[vars[[i]]]] - res[[vars[[j]]]])
+      plot_post(tmp, diff_name, comp_val = 0.0, mle = mle)
+    }, 
+    lower_plot = function(i, j) {
+      ggplot(res, aes_(vars[[j]], vars[[i]])) + 
+        {if (nrow(res) > 1000) geom_bin2d(alpha = 0.7) else geom_point(color = "skyblue", alpha = 0.4)} + 
+        geom_abline(slope = 1, linetype = "dashed") + 
+        theme(legend.position = "none")
+    } 
+  )
+}
 
 # density_func : function(values, idx) -> floats
 plot_post_predictive_with_histogram <- function(x, density_func, sample_len, 
