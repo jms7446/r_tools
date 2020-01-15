@@ -1,10 +1,3 @@
-library(rstan)
-library(ggmcmc)
-library(tidyverse)
-library(bayestestR)
-library(hBayesDM)
-library(gridExtra)
-
   
 set_stan_parallel <- function() {
   rstan_options(auto_write = T)
@@ -21,6 +14,18 @@ fit_to_tibble <- function(fit) {
     setNames(to_normal_name(names(.)))
 }
 
+add_linear_regression_Rsq <- function(coeff_sample, data, coeff_names, x_names, y_name, rsq_name = "Rsq") {
+  calc_each <- function(coeff_name, x_name) {
+    coeff_sample[[coeff_name]] * sd(data[[x_name]]) / sd(data[[y_name]]) * cor(data[[x_name]], data[[y_name]])
+  }
+  Rsq <- map2(coeff_names, x_names, calc_each) %>% reduce(~.x + .y)
+  coeff_sample %>% mutate(!!rsq_name := Rsq)
+}
+
+################################################################################
+# make grid to plot
+################################################################################
+
 sample_with_id <- function(..., id_name = "id") sample_n(...) %>% mutate(!!id_name := 1:n())
 
 crossing_with_id <- function(data, grid, id = "id") {
@@ -28,7 +33,6 @@ crossing_with_id <- function(data, grid, id = "id") {
     mutate(!!id := 1:n()) %>% 
     crossing(grid)
 }
-
 
 make_sample_grid <- function(res, x_rng, x_name = "x", num_line = 20, x_size = 200) {
   sample_n(res, size = num_line) %>% 
@@ -68,15 +72,15 @@ make_tdist_grid <- function(data, point_x, point_y, scale, nu = 100, id = "point
 ################################################################################
 
 plot_post <- function(data, param_name, rope = NULL, comp_val = NULL, cent_type = "median", 
-                      title = NULL, ci = 0.95, dec = 2, xlim = NULL, mle = NULL) {
+                      title = NULL, ci = 0.95, digits = 3, xlim = NULL, mle = NULL) {
   param <- data[[param_name]]
   
   central <- if (cent_type == "median") quantile(param, 0.5) else if (cent_type == "mean") mean(param) else NULL
-  central_text <- paste0(cent_type, " = ", round(central, dec))
+  central_text <- paste0(cent_type, " = ", signif(central, digits))
   
   hdi_rng <- hdi(param, ci = ci);  hdi_rng <- c(hdi_rng$CI_low, hdi_rng$CI_high)
   hdi_title <- paste0(ci * 100, "% HDI")
-  hdi_texts <- round(hdi_rng, dec)
+  hdi_texts <- signif(hdi_rng, digits)
   
   p <- ggplot(data, aes(param)) +
     geom_histogram(aes(y = ..density..), bins = 40, fill = "skyblue", color = "white", alpha = 0.8) + 
@@ -103,32 +107,34 @@ plot_post <- function(data, param_name, rope = NULL, comp_val = NULL, cent_type 
 #plot_post(res, "omega", rope = ROPE_OMEGA, xlim = c(0.3, 0.6), title = "Posteria of Omega")
 
 plot_post_pair_diff <- function(res, comp_idxs, par_prefix, comp_val = NULL, 
-                                mle_func = null_func) {
+                                mle_func = null_func, t_names = NULL) {
   names <- sapply(comp_idxs, function(i) paste0(par_prefix, "_", i))
   vars <- sapply(names, as.name)
+  t_names <- if (!is.null(t_names)) t_names else names
   ms_plot_pair(
     n = length(comp_idxs),  
     diag_plot = function(i, j) {
       mle <- mle_func(comp_idxs[i])
-      plot_post(res, names[i], comp_val = comp_val, mle = mle)
+      plot_post(res, names[i], comp_val = comp_val, mle = mle, title = t_names[i])
     }, 
     upper_plot = function(i, j) {
       mle <- mle_func(comp_idxs[i]) - mle_func(comp_idxs[j])
       diff_name <- paste0(names[[i]], " - ", names[[j]])
       tmp <- tibble(!!diff_name := res[[vars[[i]]]] - res[[vars[[j]]]])
-      plot_post(tmp, diff_name, comp_val = 0.0, mle = mle)
+      plot_post(tmp, diff_name, comp_val = 0.0, mle = mle, title = paste0(t_names[i], " vs ", t_names[j]))
     }, 
     lower_plot = function(i, j) {
       ggplot(res, aes_(vars[[j]], vars[[i]])) + 
         {if (nrow(res) > 1000) geom_bin2d(alpha = 0.7) else geom_point(color = "skyblue", alpha = 0.4)} + 
         geom_abline(slope = 1, linetype = "dashed") + 
-        theme(legend.position = "none")
+        theme(legend.position = "none") + 
+        labs(title = paste0(t_names[i], " vs ", t_names[j]))
     } 
   )
 }
 
 # density_func : function(values, idx) -> floats
-plot_post_predictive_with_histogram <- function(x, density_func, sample_len, 
+plot_post_predictive_with_histogram <- function(x, density_func, sample_len, data, 
                                                 num_lines = 20, title = NULL) {
   x_rng <- range(x)
   grid <- tibble(
@@ -144,7 +150,7 @@ plot_post_predictive_with_histogram <- function(x, density_func, sample_len,
       )
   }
   grid0 <- bind_rows(ss)
-  ggplot(raw_data) + 
+  ggplot(data) + 
     geom_histogram(aes(Score, ..density..), fill = "skyblue", bins = 30) + 
     geom_line(data = grid0, aes(Score, density, group = idx), color = "red", size = 0.2, alpha = 0.5) + 
     labs(title = title)

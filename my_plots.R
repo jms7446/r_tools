@@ -1,4 +1,8 @@
 
+set_plot_size <- function(width, height, res = 200) {
+    options(repr.plot.width=width, repr.plot.height=height, repr.plot.res = res)
+}
+
 ms_plot_pair <- function(n, diag_plot, upper_plot, lower_plot) {
   plots <- list()
   for (i in 1:n) {

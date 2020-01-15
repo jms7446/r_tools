@@ -1,8 +1,6 @@
-library(tidyverse)
-library(cowplot) # https://wilkelab.org/cowplot/articles/introduction.html
-library(ggthemes) # https://yutannihilation.github.io/allYourFigureAreBelongToUs/ggthemes/
-
 `%+%` <- function(a, b) paste0(a, b)
+
+standardize <- function(x) (x - mean(x)) / sd(x)
 
 calc_max_min_diff <- function(xs) {
   rng = range(xs)
@@ -12,6 +10,15 @@ calc_max_min_diff <- function(xs) {
 make_plot_file_name <- function(...) {
   name <- paste(..., sep = "_")
   paste0("plot/", name, ".pdf")
+}
+
+make_save_file_name <- function(...) {
+  name <- paste(..., sep = "_")
+  paste0("save/", name, ".RData")
+}
+
+name_to_coef <- function(names, levels, coef_prefix = "beta_") {
+    "beta_" %+% as.integer(factor(names, levels = x_levels))   
 }
 
 ggsave_plot <- function(plot, filename, ...) ggsave(filename, plot, ...)
