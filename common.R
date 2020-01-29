@@ -1,6 +1,12 @@
-`%+%` <- function(a, b) paste0(a, b)
+as_tibble_with_name <- function(data, col_name = NULL, row_name = NULL, ...) {
+    if (!is.null(col_name)) colnames(data) <- col_name
+    if (!is.null(row_name)) rownames(data) <- row_name
+    as_tibble(data, ...)
+}
 
 standardize <- function(x) (x - mean(x)) / sd(x)
+
+default_if_null <- function(x, default) if (!is.null(x)) x else default
 
 calc_max_min_diff <- function(xs) {
   rng = range(xs)
@@ -39,15 +45,19 @@ install_missing_packages <- function(pkgs) {
 null_func <- function(...) return (NULL)
 
 
-# save multiple plot
-#d <- tibble(x = 1:10, y = x * 2)
-#p1 <- ggplot(data = d, aes(x, y)) + geom_line()
-#p2 <- ggplot(data = d, aes(x, y)) + geom_point()
-#p <- gridExtra::grid.arrange(p1, p2, nrow = 1)
-#p <- egg::ggarrange(p1, p2, widths = c(1.5, 2))
-#plots <- list(p1, p2)
-#l = mget(plots)
-#ggsave("tmp_output.pdf", gridExtra::grid.arrange(p1, p2, nrow = 1))
+################################################################################
+# Operators
+################################################################################
+
+`%||%` <- function(lhs, rhs) {
+  if (!is.null(lhs)) {
+    lhs
+  } else {
+    rhs
+  }
+}
+ 
+`%+%` <- function(a, b) paste0(a, b)
 
 
 ################################################################################
