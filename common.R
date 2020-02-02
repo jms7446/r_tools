@@ -59,6 +59,12 @@ null_func <- function(...) return (NULL)
  
 `%+%` <- function(a, b) paste0(a, b)
 
+`%s%` <- function(x, y) {
+
+  do.call(sprintf, c(list(x), y))
+
+}
+
 
 ################################################################################
 # Multiple Assignment
